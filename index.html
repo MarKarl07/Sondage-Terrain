@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sondage terrain groupé — BW Est & Nord Namur</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 1.5rem 1rem 3rem;
+    }
+    .container { max-width: 860px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
+    .card {
+      background: #fff;
+      border: 1px solid #e0e0dc;
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .name-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .name-row label { font-size: 14px; color: #555; }
+    .name-row input {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 14px;
+      width: 160px;
+      background: #fff;
+      color: #1a1a1a;
+    }
+    .name-row input:focus { outline: 2px solid #4a90d9; border-color: transparent; }
+    .btn {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 7px 16px;
+      font-size: 14px;
+      background: #fff;
+      color: #1a1a1a;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #f0f0ee; }
+    .btn-save { background: #4a90d9; color: #fff; border-color: #3a80c9; font-weight: 500; }
+    .btn-save:hover { background: #3a80c9; }
+    .btn-reset { color: #888; font-size: 13px; }
+    .map-wrap { position: relative; }
+    svg.map { width: 100%; height: auto; display: block; }
+    .commune { fill: #deecd4; stroke: #aaa; stroke-width: 0.6; cursor: pointer; transition: fill 0.12s; }
+    .commune:hover .commune-rect { stroke: #333 !important; stroke-width: 1.8 !important; }
+    .commune-rect { transition: stroke 0.12s; }
+    .cname { font-size: 4.2px; fill: #333; pointer-events: none; font-family: system-ui, sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    .zone-label { font-size: 5px; fill: #888; font-style: italic; font-family: system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+    .road-label { font-size: 3.8px; fill: #c55; font-family: system-ui, sans-serif; pointer-events: none; }
+    .tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+      color: #1a1a1a;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 0.75rem; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; }
+    .legend-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+    .results-card { background: #f8f8f6; border: 1px solid #e0e0dc; border-radius: 12px; padding: 1.25rem; margin-top: 1rem; }
+    .results-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    .result-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 6px 0; font-size: 13px;
+      border-bottom: 1px solid #e8e8e4; gap: 8px;
+    }
+    .result-row:last-child { border-bottom: none; }
+    .result-name { color: #555; white-space: nowrap; font-weight: 500; }
+    .result-communes { color: #1a1a1a; font-size: 12px; text-align: right; }
+    .result-count { font-size: 11px; color: #888; margin-left: 4px; }
+    .consensus-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0dc; font-size: 13px; }
+    .consensus-row h4 { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #3a6; }
+    .consensus-tag {
+      display: inline-block;
+      background: #e8f5ee; color: #2a7a4a;
+      border-radius: 5px; padding: 3px 8px;
+      font-size: 12px; margin: 2px;
+    }
+    .status { font-size: 12px; color: #888; margin-top: 10px; text-align: right; }
+    .info-box {
+      background: #eef4fb; border: 1px solid #c5daf5; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; color: #2a5a8a; margin-bottom: 1rem;
+    }
+    .sync-indicator { font-size: 12px; color: #888; margin-top: 6px; text-align: right; }
+    @media (max-width: 500px) {
+      .name-row { flex-direction: column; align-items: flex-start; }
+      .name-row input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🗺️ Sondage terrain groupé</h1>
+  <p class="subtitle">Brabant Wallon Est &amp; Nord Namur — marque les communes qui t'intéressent</p>
+
+  <div class="info-box">
+    💡 Entre ton prénom, clique sur les communes qui t'intéressent, puis appuie sur <strong>Enregistrer</strong>. Les votes sont partagés entre tous les participants.
+  </div>
+
+  <div class="card">
+    <div class="name-row">
+      <label>Ton prénom :</label>
+      <input type="text" id="nameInput" placeholder="ex. Lucas" maxlength="20" />
+      <button class="btn btn-save" id="saveBtn">✓ Enregistrer mes choix</button>
+      <button class="btn btn-reset" id="clearBtn">Effacer mes choix</button>
+    </div>
+    <p class="sync-indicator" id="syncMsg">⟳ Chargement des votes...</p>
+  </div>
+
+  <div class="card" style="padding: 1rem;">
+    <div class="map-wrap">
+      <svg class="map" viewBox="0 0 240 180" id="mapSvg" xmlns="http://www.w3.org/2000/svg">
+
+        <!-- AXE E411 / TRAIN BXL -->
+        <g class="commune" id="c_waterloo" data-name="Waterloo">
+          <rect class="commune-rect" x="8" y="22" width="18" height="13" rx="1"/>
+          <text class="cname" x="17" y="29">Waterloo</text>
+        </g>
+        <g class="commune" id="c_lahulpe" data-name="La Hulpe">
+          <rect class="commune-rect" x="8" y="36" width="18" height="15" rx="1"/>
+          <text class="cname" x="17" y="44">La Hulpe</text>
+        </g>
+        <g class="commune" id="c_rixensart" data-name="Rixensart">
+          <rect class="commune-rect" x="8" y="52" width="20" height="16" rx="1"/>
+          <text class="cname" x="18" y="60">Rixensart</text>
+        </g>
+        <g class="commune" id="c_genappe" data-name="Genappe">
+          <rect class="commune-rect" x="8" y="68" width="20" height="16" rx="1"/>
+          <text class="cname" x="18" y="76">Genappe</text>
+        </g>
+        <g class="commune" id="c_wavre" data-name="Wavre">
+          <rect class="commune-rect" x="28" y="36" width="20" height="15" rx="1"/>
+          <text class="cname" x="38" y="44">Wavre</text>
+        </g>
+        <g class="commune" id="c_limal" data-name="Limal">
+          <rect class="commune-rect" x="28" y="52" width="18" height="16" rx="1"/>
+          <text class="cname" x="37" y="60">Limal</text>
+        </g>
+        <g class="commune" id="c_villers" data-name="Villers-la-Ville">
+          <rect class="commune-rect" x="28" y="68" width="17" height="16" rx="1"/>
+          <text class="cname" x="36.5" y="74">Villers-</text>
+          <text class="cname" x="36.5" y="79">la-Ville</text>
+        </g>
+        <g class="commune" id="c_bierges" data-name="Bierges">
+          <rect class="commune-rect" x="48" y="36" width="17" height="15" rx="1"/>
+          <text class="cname" x="56.5" y="44">Bierges</text>
+        </g>
+        <g class="commune" id="c_chaumont" data-name="Chaumont-Gistoux">
+          <rect class="commune-rect" x="46" y="52" width="22" height="16" rx="1"/>
+          <text class="cname" x="57" y="58">Chaumont-</text>
+          <text class="cname" x="57" y="63">Gistoux</text>
+        </g>
+        <g class="commune" id="c_msg" data-name="Mont-St-Guibert">
+          <rect class="commune-rect" x="46" y="68" width="22" height="16" rx="1"/>
+          <text class="cname" x="57" y="74">Mont-St-</text>
+          <text class="cname" x="57" y="79">Guibert</text>
+        </g>
+
+        <!-- BRABANT WALLON EST -->
+        <g class="commune" id="c_olln" data-name="Ottignies-LLN">
+          <rect class="commune-rect" x="68" y="52" width="22" height="15" rx="1"/>
+          <text class="cname" x="79" y="58">Ottignies</text>
+          <text class="cname" x="79" y="63">LLN</text>
+        </g>
+        <g class="commune" id="c_cse" data-name="Court-St-Étienne">
+          <rect class="commune-rect" x="68" y="68" width="22" height="15" rx="1"/>
+          <text class="cname" x="79" y="74">Court-</text>
+          <text class="cname" x="79" y="79">St-É.</text>
+        </g>
+        <g class="commune" id="c_chastre" data-name="Chastre">
+          <rect class="commune-rect" x="68" y="84" width="20" height="16" rx="1"/>
+          <text class="cname" x="78" y="92">Chastre</text>
+        </g>
+        <g class="commune" id="c_walhain" data-name="Walhain">
+          <rect class="commune-rect" x="68" y="100" width="20" height="15" rx="1"/>
+          <text class="cname" x="78" y="108">Walhain</text>
+        </g>
+        <g class="commune" id="c_incourt" data-name="Incourt">
+          <rect class="commune-rect" x="90" y="52" width="18" height="15" rx="1"/>
+          <text class="cname" x="99" y="60">Incourt</text>
+        </g>
+        <g class="commune" id="c_perwez" data-name="Perwez">
+          <rect class="commune-rect" x="90" y="36" width="20" height="15" rx="1"/>
+          <text class="cname" x="100" y="44">Perwez</text>
+        </g>
+        <g class="commune" id="c_ramillies" data-name="Ramillies">
+          <rect class="commune-rect" x="90" y="20" width="20" height="15" rx="1"/>
+          <text class="cname" x="100" y="28">Ramillies</text>
+        </g>
+        <g class="commune" id="c_beauvechain" data-name="Beauvechain">
+          <rect class="commune-rect" x="90" y="5" width="20" height="14" rx="1"/>
+          <text class="cname" x="100" y="12">Beauvechain</text>
+        </g>
+        <g class="commune" id="c_jodoigne" data-name="Jodoigne">
+          <rect class="commune-rect" x="110" y="5" width="22" height="14" rx="1"/>
+          <text class="cname" x="121" y="12">Jodoigne</text>
+        </g>
+        <g class="commune" id="c_orp" data-name="Orp-Jauche">
+          <rect class="commune-rect" x="110" y="20" width="22" height="15" rx="1"/>
+          <text class="cname" x="121" y="28">Orp-Jauche</text>
+        </g>
+
+        <!-- NORD NAMUR -->
+        <g class="commune" id="c_sombreffe" data-name="Sombreffe">
+          <rect class="commune-rect" x="46" y="100" width="20" height="16" rx="1"/>
+          <text class="cname" x="56" y="108">Sombreffe</text>
+        </g>
+        <g class="commune" id="c_floreffe" data-name="Floreffe">
+          <rect class="commune-rect" x="26" y="116" width="18" height="16" rx="1"/>
+          <text class="cname" x="35" y="124">Floreffe</text>
+        </g>
+        <g class="commune" id="c_fosses" data-name="Fosses-la-Ville">
+          <rect class="commune-rect" x="46" y="116" width="20" height="16" rx="1"/>
+          <text class="cname" x="56" y="124">Fosses</text>
+        </g>
+        <g class="commune" id="c_gembloux" data-name="Gembloux">
+          <rect class="commune-rect" x="68" y="116" width="24" height="16" rx="1"/>
+          <text class="cname" x="80" y="124">Gembloux</text>
+        </g>
+        <g class="commune" id="c_namur" data-name="Namur (nord)">
+          <rect class="commune-rect" x="68" y="133" width="24" height="16" rx="1"/>
+          <text class="cname" x="80" y="141">Namur nord</text>
+        </g>
+        <g class="commune" id="c_eghezee" data-name="Éghezée">
+          <rect class="commune-rect" x="92" y="100" width="22" height="16" rx="1"/>
+          <text class="cname" x="103" y="108">Éghezée</text>
+        </g>
+        <g class="commune" id="c_fernelmont" data-name="Fernelmont">
+          <rect class="commune-rect" x="114" y="84" width="22" height="16" rx="1"/>
+          <text class="cname" x="125" y="92">Fernelmont</text>
+        </g>
+        <g class="commune" id="c_andenne" data-name="Andenne">
+          <rect class="commune-rect" x="136" y="52" width="22" height="16" rx="1"/>
+          <text class="cname" x="147" y="60">Andenne</text>
+        </g>
+        <g class="commune" id="c_gesves" data-name="Gesves">
+          <rect class="commune-rect" x="158" y="52" width="18" height="16" rx="1"/>
+          <text class="cname" x="167" y="60">Gesves</text>
+        </g>
+        <g class="commune" id="c_ohey" data-name="Ohey">
+          <rect class="commune-rect" x="158" y="68" width="18" height="16" rx="1"/>
+          <text class="cname" x="167" y="76">Ohey</text>
+        </g>
+        <g class="commune" id="c_assesse" data-name="Assesse">
+          <rect class="commune-rect" x="158" y="84" width="18" height="16" rx="1"/>
+          <text class="cname" x="167" y="92">Assesse</text>
+        </g>
+        <g class="commune" id="c_profondeville" data-name="Profondeville">
+          <rect class="commune-rect" x="92" y="133" width="24" height="16" rx="1"/>
+          <text class="cname" x="104" y="141">Profondeville</text>
+        </g>
+
+        <!-- Zone labels -->
+        <text class="zone-label" x="30" y="18">Axe E411 / train BXL</text>
+        <text class="zone-label" x="100" y="46">Brabant Wallon Est</text>
+        <text class="zone-label" x="148" y="110">Nord Namur</text>
+        <line x1="18" y1="69" x2="57" y2="69" stroke="#e88" stroke-width="0.8" stroke-dasharray="2,1.5" opacity="0.5"/>
+        <line x1="57" y1="69" x2="79" y2="92" stroke="#e88" stroke-width="0.8" stroke-dasharray="2,1.5" opacity="0.5"/>
+        <text class="road-label" x="22" y="67" opacity="0.7">E411</text>
+      </svg>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="results-card">
+    <h3>Résultats du groupe</h3>
+    <div id="resultsList"><p style="font-size:13px;color:#888">Chargement...</p></div>
+    <div id="consensusBox"></div>
+    <p class="status" id="statusMsg"></p>
+  </div>
+</div>
+
+<script>
+  const BIN_ID = '69b81b2dc3097a1dd52dd975';
+  const API_KEY = '$2a$10$rtV/VnA4Eg5OLdNwB9ZmIu4sZZAfAUTas1JIJIb0rJCk.9F/5QCqq';
+  const BASE_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+  const COLORS = ['#4a90d9','#e07840','#8e5cad','#3dab6b','#c0392b','#b07830','#16a085'];
+
+  let myName = '';
+  let mySelected = new Set();
+  let allVotes = {};
+
+  async function loadVotes() {
+    try {
+      const res = await fetch(`${BASE_URL}/latest`, {
+        headers: { 'X-Access-Key': API_KEY }
+      });
+      const data = await res.json();
+      allVotes = data.record.votes || {};
+      document.getElementById('syncMsg').textContent = `⟳ Dernière sync : ${new Date().toLocaleTimeString('fr-BE')}`;
+    } catch(e) {
+      document.getElementById('syncMsg').textContent = '⚠️ Erreur de chargement';
+    }
+  }
+
+  async function saveVotes() {
+    try {
+      await fetch(BASE_URL, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Key': API_KEY
+        },
+        body: JSON.stringify({ votes: allVotes })
+      });
+    } catch(e) {
+      document.getElementById('statusMsg').textContent = '⚠️ Erreur de sauvegarde';
+    }
+  }
+
+  function renderMap() {
+    document.querySelectorAll('.commune').forEach(el => {
+      el.style.fill = '#deecd4';
+      const rect = el.querySelector('.commune-rect');
+      if (rect) { rect.setAttribute('stroke','#aaa'); rect.setAttribute('stroke-width','0.6'); }
+    });
+
+    const names = Object.keys(allVotes);
+    const communeVoters = {};
+    names.forEach((name, pi) => {
+      (allVotes[name] || []).forEach(cid => {
+        if (!communeVoters[cid]) communeVoters[cid] = [];
+        communeVoters[cid].push(pi);
+      });
+    });
+
+    Object.entries(communeVoters).forEach(([cid, voters]) => {
+      const el = document.getElementById(cid);
+      if (!el) return;
+      el.style.fill = voters.length === 1 ? COLORS[voters[0] % COLORS.length] : '#999';
+    });
+
+    mySelected.forEach(cid => {
+      const el = document.getElementById(cid);
+      if (!el) return;
+      const rect = el.querySelector('.commune-rect');
+      if (rect) { rect.setAttribute('stroke','#111'); rect.setAttribute('stroke-width','2'); }
+    });
+  }
+
+  function renderLegend() {
+    const leg = document.getElementById('legend');
+    const names = Object.keys(allVotes);
+    leg.innerHTML = '';
+    names.forEach((name, pi) => {
+      leg.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${COLORS[pi%COLORS.length]}"></div><span>${name}</span></div>`;
+    });
+    if (names.length > 1) {
+      leg.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:#999"></div><span>Plusieurs votes</span></div>`;
+    }
+  }
+
+  function renderResults() {
+    const list = document.getElementById('resultsList');
+    const consensus = document.getElementById('consensusBox');
+    const names = Object.keys(allVotes);
+
+    if (names.length === 0) {
+      list.innerHTML = '<p style="font-size:13px;color:#888">Aucune réponse enregistrée.</p>';
+      consensus.innerHTML = '';
+      return;
+    }
+
+    list.innerHTML = names.map(name => {
+      const communes = allVotes[name] || [];
+      const labels = communes.map(cid => {
+        const el = document.getElementById(cid);
+        return el ? el.getAttribute('data-name') : cid;
+      }).join(', ');
+      return `<div class="result-row">
+        <span class="result-name">${name}</span>
+        <span class="result-communes">${labels || '—'} <span class="result-count">(${communes.length})</span></span>
+      </div>`;
+    }).join('');
+
+    if (names.length >= 2) {
+      const communeVotes = {};
+      names.forEach(name => {
+        (allVotes[name]||[]).forEach(cid => { communeVotes[cid] = (communeVotes[cid]||0)+1; });
+      });
+      const shared = Object.entries(communeVotes).filter(([,v]) => v >= 2);
+      if (shared.length > 0) {
+        const tags = shared.sort((a,b) => b[1]-a[1]).map(([cid, count]) => {
+          const el = document.getElementById(cid);
+          const name = el ? el.getAttribute('data-name') : cid;
+          return `<span class="consensus-tag">✓ ${name} (${count}/${names.length})</span>`;
+        }).join('');
+        consensus.innerHTML = `<div class="consensus-row"><h4>Communes en commun</h4>${tags}</div>`;
+      } else {
+        consensus.innerHTML = `<div class="consensus-row" style="color:#888;font-size:13px;">Pas encore de commune en commun.</div>`;
+      }
+    }
+  }
+
+  function render() { renderMap(); renderLegend(); renderResults(); }
+
+  document.querySelectorAll('.commune').forEach(el => {
+    el.addEventListener('click', () => {
+      const cid = el.id;
+      if (mySelected.has(cid)) mySelected.delete(cid);
+      else mySelected.add(cid);
+      render();
+    });
+    el.addEventListener('mouseenter', () => {
+      const tip = document.getElementById('tooltip');
+      const name = el.getAttribute('data-name');
+      const selectors = Object.keys(allVotes).filter(n => (allVotes[n]||[]).includes(el.id));
+      tip.textContent = name + (selectors.length ? ' — ' + selectors.join(', ') : '');
+      tip.style.display = 'block';
+    });
+    el.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display = 'none'; });
+    el.addEventListener('mousemove', e => {
+      const tip = document.getElementById('tooltip');
+      const wrap = document.querySelector('.map-wrap');
+      const rect = wrap.getBoundingClientRect();
+      tip.style.left = (e.clientX - rect.left + 12) + 'px';
+      tip.style.top = (e.clientY - rect.top - 38) + 'px';
+    });
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const name = document.getElementById('nameInput').value.trim();
+    if (!name) { alert('Entre ton prénom avant d\'enregistrer.'); return; }
+    myName = name;
+    document.getElementById('statusMsg').textContent = 'Sauvegarde en cours...';
+    await loadVotes();
+    allVotes[myName] = Array.from(mySelected);
+    await saveVotes();
+    document.getElementById('statusMsg').textContent = `✓ Enregistré à ${new Date().toLocaleTimeString('fr-BE')}`;
+    render();
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', async () => {
+    const name = document.getElementById('nameInput').value.trim();
+    mySelected.clear();
+    if (name && allVotes[name]) {
+      await loadVotes();
+      delete allVotes[name];
+      await saveVotes();
+    }
+    render();
+    document.getElementById('statusMsg').textContent = 'Choix effacés.';
+  });
+
+  // Init + auto-refresh toutes les 30s
+  (async () => { await loadVotes(); render(); })();
+  setInterval(async () => { await loadVotes(); render(); }, 30000);
+</script>
+</body>
+</html>
